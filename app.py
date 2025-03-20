@@ -27,7 +27,7 @@ from gguf_orpheus import (
 )
 
 
-def create_audio_player(audio_data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> str:
+def get_audio_bytes(audio_data: np.ndarray, sample_rate: int = SAMPLE_RATE):
     """
     Create an HTML audio player for the given audio data.
 
@@ -35,25 +35,13 @@ def create_audio_player(audio_data: np.ndarray, sample_rate: int = SAMPLE_RATE) 
         audio_data: Audio data as a numpy array
         sample_rate: Sample rate of the audio data
 
-    Returns:
-        HTML string with an audio player
     """
     # Convert to bytes
     virtual_file = io.BytesIO()
     sf.write(virtual_file, audio_data, sample_rate, format="WAV")
     audio_bytes = virtual_file.getvalue()
 
-    # Encode as base64
-    audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-
-    # Create HTML audio element
-    audio_html = f"""
-    <audio controls autoplay>
-        <source src="data:audio/wav;base64,{audio_base64}" type="audio/wav">
-        Your browser does not support the audio element.
-    </audio>
-    """
-    return audio_html
+    return audio_bytes
 
 
 def get_download_link(
@@ -110,6 +98,8 @@ def main():
     # Initialize session state for connection status if not exists
     if "connection_active" not in st.session_state:
         st.session_state.connection_active = None
+    if "last_audio" not in st.session_state:
+        st.session_state.last_audio = []
 
     st.title("Orpheus Text-to-Speech")
     st.markdown("""
@@ -166,7 +156,7 @@ def main():
     with status_col1:
         if st.session_state.connection_active is None:
             st.sidebar.caption("⚪ Connection status unknown")
-        elif st.session_state.connection_active:
+        elif st.session_state.connection_active is True:
             st.sidebar.caption("🟢 Connection active")
         else:
             st.sidebar.caption("🔴 Connection error")
@@ -193,7 +183,7 @@ def main():
     )
 
     # Advanced options
-    with st.sidebar.expander("Advanced Options"):
+    with st.sidebar.expander("Options"):
         temperature = st.slider(
             "Temperature",
             0.0,
@@ -239,8 +229,7 @@ def main():
     # Example prompts
     st.header("Example Prompts")
     examples = {
-        "Basic greeting": "Hello, my name is Orpheus. I'm a text-to-speech model that can speak with emotions.",
-        "Weather report": "Today's forecast calls for sunny skies with a high of 75 degrees. Perfect weather for outdoor activities!",
+        "Basic greeting": f"Hello, my name is {selected_voice.capitalize()}. I'm a text-to-speech model that can speak with emotions.",
         "Emotional story": "I was so nervous before the presentation <sigh>, but then I remembered all my preparation. When I finished, everyone applauded <laugh> and I felt so relieved!",
         "Technical explanation": "Orpheus TTS is a state-of-the-art, Llama-based Speech-LLM designed for high-quality, empathetic text-to-speech generation. This model is the base model that can be used for many downstream tasks, like TTS, Zero-shot voice cloning and classification.",
     }
@@ -251,20 +240,6 @@ def main():
     input_text = st.text_area(
         "Enter text to convert to speech", value=examples[example_prompt], height=150
     )
-
-    # Output options
-    output_col1, output_col2 = st.columns(2)
-    with output_col1:
-        save_option = st.checkbox("Save audio to file", value=False)
-
-    with output_col2:
-        if save_option:
-            output_filename = st.text_input(
-                "Output filename", value=f"{selected_voice}_{int(time.time())}.wav"
-            )
-            # Ensure proper extension
-            if not output_filename.endswith(".wav"):
-                output_filename += ".wav"
 
     # Generate button
     if st.button("Generate Speech"):
@@ -280,13 +255,6 @@ def main():
             # Call the generation function
             try:
                 start_time = time.time()
-
-                # Prepare output file if needed
-                output_file = None
-                if save_option:
-                    output_dir = Path("outputs")
-                    output_dir.mkdir(exist_ok=True)
-                    output_file = output_dir / output_filename
 
                 # Prepare API headers
                 headers = DEFAULT_HEADERS.copy()
@@ -309,7 +277,6 @@ def main():
                         top_p=top_p,
                         max_tokens=max_tokens,
                         repetition_penalty=repetition_penalty,
-                        output_file=str(output_file) if output_file else None,
                     )
                 finally:
                     # Restore original values
@@ -330,21 +297,13 @@ def main():
 
                     # Display audio player
                     st.subheader("Generated Speech")
-                    st.markdown(
-                        create_audio_player(combined_audio), unsafe_allow_html=True
+                    st.session_state.last_audio.append(
+                        {
+                            "audio": get_audio_bytes(combined_audio),
+                            "name": f"{selected_voice}_{int(time.time())}",
+                            "text": input_text,
+                        }
                     )
-
-                    # Provide download link if not already saved
-                    if not save_option:
-                        st.markdown(
-                            get_download_link(
-                                combined_audio,
-                                f"{selected_voice}_{int(time.time())}.wav",
-                            ),
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.success(f"Audio saved to {output_file}")
                 else:
                     st.error(
                         "No audio was generated. Check if LM Studio is running with the Orpheus model loaded."
@@ -376,6 +335,45 @@ def main():
                 # Show a more technical error message in an expander for debugging
                 with st.expander("Technical Error Details"):
                     st.code(error_msg)
+    if st.session_state.last_audio:
+        st.audio(data=st.session_state.last_audio[-1]["audio"], format="audio/wav")
+
+        # Provide download link
+        output_filename = st.text_input(
+            "Output filename",
+            value=f"{selected_voice}_{int(time.time())}.wav",
+        )
+        # Ensure proper extension
+        if not output_filename.endswith(".wav"):
+            output_filename += ".wav"
+        st.download_button(
+            label="download audio",
+            file_name=output_filename,
+            mime="audio/wav",
+            data=st.session_state.last_audio[-1]["name"],
+        )
+        st.subheader("History")
+        for audio_file in reversed(st.session_state.last_audio[:-1]):
+            with st.expander(
+                label=f"{audio_file['text'][:45]}{'...' if len(audio_file['text']) > 45 else ''}",
+                expanded=False,
+            ):
+                st.audio(data=audio_file["audio"], format="audio/wav")
+
+                # Provide download link
+                output_filename = st.text_input(
+                    "Output filename",
+                    value=audio_file["name"],
+                )
+                # Ensure proper extension
+                if not output_filename.endswith(".wav"):
+                    output_filename += ".wav"
+                st.download_button(
+                    label="download audio",
+                    file_name=output_filename,
+                    mime="audio/wav",
+                    data=audio_file["audio"],
+                )
 
 
 if __name__ == "__main__":
