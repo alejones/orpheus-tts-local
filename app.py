@@ -105,6 +105,8 @@ def main():
     Make sure you have LM Studio running with the Orpheus model loaded.
     """)
 
+    st.divider()
+
     # Sidebar for configuration
     st.sidebar.header("Configuration")
 
@@ -224,15 +226,13 @@ def main():
     - `<gasp>` - Gasp
     """)
 
-    # Example prompts
-    st.header("Example Prompts")
     examples = {
         "Basic greeting": f"Hello, my name is {selected_voice.capitalize()}. I'm a text-to-speech model that can speak with emotions.",
         "Emotional story": "I was so nervous before the presentation <sigh>, but then I remembered all my preparation. When I finished, everyone applauded <laugh> and I felt so relieved!",
         "Technical explanation": "Orpheus TTS is a state-of-the-art, Llama-based Speech-LLM designed for high-quality, empathetic text-to-speech generation. This model is the base model that can be used for many downstream tasks, like TTS, Zero-shot voice cloning and classification.",
     }
 
-    example_prompt = st.selectbox("Try an example:", list(examples.keys()))
+    example_prompt = st.selectbox("Example Prompts:", list(examples.keys()))
 
     # Main input area
     input_text = st.text_area(
