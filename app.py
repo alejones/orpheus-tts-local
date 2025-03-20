@@ -244,95 +244,90 @@ def main():
         if not input_text:
             st.error("Please enter some text to convert to speech.")
         else:
-            # Create a progress indication
-            progress_text = "Generating speech... This may take a few moments."
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            status_text.text(progress_text)
-
-            # Call the generation function
-            try:
-                start_time = time.time()
-
-                # Prepare API headers
-                headers = DEFAULT_HEADERS.copy()
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-
-                # Monkey patch the API_URL and HEADERS in the module
-                import gguf_orpheus
-
-                original_api_url = gguf_orpheus.API_URL
-                original_headers = gguf_orpheus.HEADERS
-                gguf_orpheus.API_URL = api_url
-                gguf_orpheus.HEADERS = headers
-
+            with st.spinner():
+                # Call the generation function
                 try:
-                    audio_segments = generate_speech_from_api(
-                        prompt=input_text,
-                        voice=selected_voice,
-                        temperature=temperature,
-                        top_p=top_p,
-                        max_tokens=max_tokens,
-                        repetition_penalty=repetition_penalty,
-                    )
-                finally:
-                    # Restore original values
-                    gguf_orpheus.API_URL = original_api_url
-                    gguf_orpheus.HEADERS = original_headers
+                    start_time = time.time()
 
-                generation_time = time.time() - start_time
+                    # Prepare API headers
+                    headers = DEFAULT_HEADERS.copy()
+                    if api_key:
+                        headers["Authorization"] = f"Bearer {api_key}"
 
-                # Update progress
-                progress_bar.progress(100)
-                status_text.text(f"Speech generated in {generation_time:.2f} seconds!")
+                    # Monkey patch the API_URL and HEADERS in the module
+                    import gguf_orpheus
 
-                st.session_state.connection_active = True
+                    original_api_url = gguf_orpheus.API_URL
+                    original_headers = gguf_orpheus.HEADERS
+                    gguf_orpheus.API_URL = api_url
+                    gguf_orpheus.HEADERS = headers
 
-                # Convert segments to a single audio array
-                if audio_segments:
-                    combined_audio = combined_audio_segments(audio_segments)
+                    try:
+                        audio_segments = generate_speech_from_api(
+                            prompt=input_text,
+                            voice=selected_voice,
+                            temperature=temperature,
+                            top_p=top_p,
+                            max_tokens=max_tokens,
+                            repetition_penalty=repetition_penalty,
+                        )
+                    finally:
+                        # Restore original values
+                        gguf_orpheus.API_URL = original_api_url
+                        gguf_orpheus.HEADERS = original_headers
 
-                    # Display audio player
-                    st.subheader("Generated Speech")
-                    st.session_state.last_audio.append(
-                        {
-                            "audio": get_audio_bytes(combined_audio),
-                            "name": f"{selected_voice}_{int(time.time())}",
-                            "text": input_text,
-                        }
-                    )
-                else:
-                    st.error(
-                        "No audio was generated. Check if LM Studio is running with the Orpheus model loaded."
-                    )
+                    generation_time = time.time() - start_time
 
-            except Exception as e:
-                error_msg = str(e)
+                    st.text(f"Speech generated in {generation_time:.2f} seconds")
 
-                # Show user-friendly error message in sidebar
-                if "NewConnectionError" in error_msg and "refused" in error_msg:
-                    st.sidebar.error("❌ Connection refused")
-                    error_details = "The server actively refused the connection. Make sure LM Studio is running."
-                elif "ConnectTimeoutError" in error_msg:
-                    st.sidebar.error("❌ Connection timeout")
-                    error_details = "The connection timed out. Check if the server address is correct."
-                elif "Max retries exceeded" in error_msg:
-                    st.sidebar.error("❌ Max retries exceeded")
-                    error_details = "Could not connect after multiple attempts. Is the server running?"
-                else:
-                    st.sidebar.error("❌ Connection error")
-                    error_details = error_msg
+                    st.session_state.connection_active = True
 
-                # Update session state
-                st.session_state.connection_active = False
+                    # Convert segments to a single audio array
+                    if audio_segments:
+                        combined_audio = combined_audio_segments(audio_segments)
 
-                # Show detailed error in main area
-                st.error(f"Error generating speech: {error_details}")
+                        # Display audio player
+                        st.subheader("Generated Speech")
+                        st.session_state.last_audio.append(
+                            {
+                                "audio": get_audio_bytes(combined_audio),
+                                "name": f"{selected_voice}_{int(time.time())}",
+                                "text": input_text,
+                            }
+                        )
+                    else:
+                        st.error(
+                            "No audio was generated. Check if LM Studio is running with the Orpheus model loaded."
+                        )
 
-                # Show a more technical error message in an expander for debugging
-                with st.expander("Technical Error Details"):
-                    st.code(error_msg)
+                except Exception as e:
+                    error_msg = str(e)
+
+                    # Show user-friendly error message in sidebar
+                    if "NewConnectionError" in error_msg and "refused" in error_msg:
+                        st.sidebar.error("❌ Connection refused")
+                        error_details = "The server actively refused the connection. Make sure LM Studio is running."
+                    elif "ConnectionError" in error_msg:
+                        st.sidebar.error("❌ Connection Error")
+                    elif "ConnectTimeoutError" in error_msg:
+                        st.sidebar.error("❌ Connection timeout")
+                        error_details = "The connection timed out. Check if the server address is correct."
+                    elif "Max retries exceeded" in error_msg:
+                        st.sidebar.error("❌ Max retries exceeded")
+                        error_details = "Could not connect after multiple attempts. Is the server running?"
+                    else:
+                        st.sidebar.error("❌ Connection error")
+                        error_details = error_msg
+
+                    # Update session state
+                    st.session_state.connection_active = False
+
+                    # Show detailed error in main area
+                    st.error(f"Error generating speech: {error_details}")
+
+                    # Show a more technical error message in an expander for debugging
+                    with st.expander("Technical Error Details"):
+                        st.code(error_msg)
     if st.session_state.last_audio:
         st.audio(data=st.session_state.last_audio[-1]["audio"], format="audio/wav")
 
@@ -353,7 +348,7 @@ def main():
         st.subheader("History")
         for audio_file in reversed(st.session_state.last_audio[:-1]):
             with st.expander(
-                label=f"{audio_file['text'][:45]}{'...' if len(audio_file['text']) > 45 else ''}",
+                label=f"{audio_file['text'][:60]}{'...' if len(audio_file['text']) > 60 else ''}",
                 expanded=False,
             ):
                 st.audio(data=audio_file["audio"], format="audio/wav")
