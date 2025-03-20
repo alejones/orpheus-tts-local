@@ -244,11 +244,9 @@ def main():
         if not input_text:
             st.error("Please enter some text to convert to speech.")
         else:
-            with st.spinner():
+            with st.spinner(show_time=True):
                 # Call the generation function
                 try:
-                    start_time = time.time()
-
                     # Prepare API headers
                     headers = DEFAULT_HEADERS.copy()
                     if api_key:
@@ -276,12 +274,6 @@ def main():
                         gguf_orpheus.API_URL = original_api_url
                         gguf_orpheus.HEADERS = original_headers
 
-                    generation_time = time.time() - start_time
-
-                    st.text(f"Speech generated in {generation_time:.2f} seconds")
-
-                    st.session_state.connection_active = True
-
                     # Convert segments to a single audio array
                     if audio_segments:
                         combined_audio = combined_audio_segments(audio_segments)
@@ -295,6 +287,8 @@ def main():
                                 "text": input_text,
                             }
                         )
+                        st.session_state.connection_active = True
+
                     else:
                         st.error(
                             "No audio was generated. Check if LM Studio is running with the Orpheus model loaded."
@@ -307,8 +301,6 @@ def main():
                     if "NewConnectionError" in error_msg and "refused" in error_msg:
                         st.sidebar.error("❌ Connection refused")
                         error_details = "The server actively refused the connection. Make sure LM Studio is running."
-                    elif "ConnectionError" in error_msg:
-                        st.sidebar.error("❌ Connection Error")
                     elif "ConnectTimeoutError" in error_msg:
                         st.sidebar.error("❌ Connection timeout")
                         error_details = "The connection timed out. Check if the server address is correct."
