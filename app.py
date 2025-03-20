@@ -16,7 +16,6 @@ from gguf_orpheus import (
 from gguf_orpheus import (
     AVAILABLE_VOICES,
     DEFAULT_VOICE,
-    MAX_TOKENS,
     REPETITION_PENALTY,
     SAMPLE_RATE,
     TEMPERATURE,
@@ -174,21 +173,23 @@ def main():
 
     # Voice selection with tooltips
     voice_descriptions = {
-        "tara": "Best overall voice, conversational and natural",
-        "leah": "Clear and professional female voice",
-        "jess": "Slightly higher pitched female voice",
-        "leo": "Deep male voice",
-        "dan": "Neutral male voice",
-        "mia": "Soft female voice",
-        "zac": "Young male voice",
-        "zoe": "Expressive female voice",
+        "tara": "Best overall voice",
+        "leah": "",
+        "jess": "",
+        "leo": "",
+        "dan": "",
+        "mia": "",
+        "zac": "",
+        "zoe": "",
     }
 
     selected_voice = st.sidebar.selectbox(
         "Select Voice",
         AVAILABLE_VOICES,
         index=AVAILABLE_VOICES.index(DEFAULT_VOICE),
-        format_func=lambda x: f"{x} - {voice_descriptions.get(x, '')}",
+        format_func=lambda x: f"{x} - {voice_descriptions[x]}"
+        if voice_descriptions[x]
+        else x,
     )
 
     # Advanced options
@@ -213,11 +214,11 @@ def main():
             help="Prevents repetition of phrases, values >=1.1 recommended",
         )
         max_tokens = st.slider(
-            "Max Tokens",
-            100,
-            2000,
-            MAX_TOKENS,
-            100,
+            label="Max Tokens",
+            min_value=100,
+            max_value=8096,
+            value=1200,
+            step=100,
             help="Maximum length of generated speech",
         )
 
@@ -236,15 +237,15 @@ def main():
     """)
 
     # Example prompts
-    st.sidebar.header("Example Prompts")
+    st.header("Example Prompts")
     examples = {
         "Basic greeting": "Hello, my name is Orpheus. I'm a text-to-speech model that can speak with emotions.",
         "Weather report": "Today's forecast calls for sunny skies with a high of 75 degrees. Perfect weather for outdoor activities!",
         "Emotional story": "I was so nervous before the presentation <sigh>, but then I remembered all my preparation. When I finished, everyone applauded <laugh> and I felt so relieved!",
-        "Technical explanation": "Neural text-to-speech models use deep learning to generate realistic human-like speech. They've improved dramatically in recent years.",
+        "Technical explanation": "Orpheus TTS is a state-of-the-art, Llama-based Speech-LLM designed for high-quality, empathetic text-to-speech generation. This model is the base model that can be used for many downstream tasks, like TTS, Zero-shot voice cloning and classification.",
     }
 
-    example_prompt = st.sidebar.selectbox("Try an example:", list(examples.keys()))
+    example_prompt = st.selectbox("Try an example:", list(examples.keys()))
 
     # Main input area
     input_text = st.text_area(
@@ -321,8 +322,6 @@ def main():
                 progress_bar.progress(100)
                 status_text.text(f"Speech generated in {generation_time:.2f} seconds!")
 
-                # Update connection status in sidebar to show success
-                st.sidebar.success("✅ Connection active")
                 st.session_state.connection_active = True
 
                 # Convert segments to a single audio array
@@ -377,63 +376,6 @@ def main():
                 # Show a more technical error message in an expander for debugging
                 with st.expander("Technical Error Details"):
                     st.code(error_msg)
-
-    # Show LM Studio API info
-    st.markdown("---")
-    st.subheader("Connection Status")
-
-    # Check connection button
-    if st.button("Test API Connection"):
-        try:
-            import json
-
-            import requests
-
-            # Prepare headers
-            headers = DEFAULT_HEADERS.copy()
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            # Simple test request
-            test_payload = {"prompt": "test", "max_tokens": 1, "stream": False}
-
-            with st.spinner("Testing connection..."):
-                response = requests.post(
-                    api_url, headers=headers, json=test_payload, timeout=5
-                )
-
-            if response.status_code == 200:
-                st.success(f"✅ Connection successful to {api_url}")
-                st.session_state.connection_active = True
-                st.json(
-                    {"status": response.status_code, "message": "API is responsive"}
-                )
-            else:
-                st.error(
-                    f"❌ Connection failed with status code: {response.status_code}"
-                )
-                st.session_state.connection_active = False
-                st.json({"status": response.status_code, "details": response.text})
-        except Exception as e:
-            error_msg = str(e)
-            st.session_state.connection_active = False
-
-            if "NewConnectionError" in error_msg and "refused" in error_msg:
-                st.error(
-                    "❌ Connection refused. The server actively refused the connection."
-                )
-            elif "ConnectTimeoutError" in error_msg:
-                st.error("❌ Connection timeout. Check server address.")
-            else:
-                st.error(f"❌ Connection error: {str(e)}")
-
-            st.info("""
-            Troubleshooting steps:
-            1. Check if LM Studio is running
-            2. Verify the API URL is correct
-            3. Make sure the Orpheus model is loaded in LM Studio
-            4. Check if a firewall is blocking the connection
-            """)
 
 
 if __name__ == "__main__":
